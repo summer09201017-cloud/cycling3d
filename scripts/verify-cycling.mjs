@@ -261,6 +261,38 @@ await page.evaluate((g) => {
 }, G);
 await page.waitForTimeout(200);
 await page.screenshot({ path: outDir + "/cy-glance-left.png" });
+await page.screenshot({ path: outDir + "/cy-glance-big.png" }); // ①騎士頭轉峰值(~0.6)+大微笑,眼睛仍露、耳前無髮
+await page.evaluate((g) => { window[g].freeCam = false; }, G);
+
+// —— ⑨ 觀眾生動:舉手歡呼(雙臂高低錯開的人浪)+ 頭左右看,截圖看台 ——
+await page.evaluate((g) => {
+  const game = window[g];
+  game.freeCam = true;
+  const V = game.camera.position.constructor;
+  const pts = game.crowdFigures.map((c) => c.f.group.getWorldPosition(new V())).filter((p) => p.z < 0);
+  let cx = 0; let cz = 0;
+  for (const p of pts) { cx += p.x; cz += p.z; }
+  cx /= pts.length; cz /= pts.length;
+  // 沿看台斜看:一整排觀眾入鏡,手臂高低錯開的人浪一目了然
+  game.camera.position.set(cx - 26, 6.2, cz + 11);
+  game.camera.lookAt(cx + 6, 3.7, cz);
+  game.camera.fov = 56;
+  game.camera.updateProjectionMatrix();
+}, G);
+await page.waitForTimeout(300);
+const crowd = await page.evaluate((g) => {
+  const game = window[g];
+  const arms = game.crowdFigures.map((c) => Math.round((c.f.leftArm?.pivot.rotation.x ?? 0) * 100) / 100);
+  const heads = game.crowdFigures.map((c) => Math.round((c.f.headGroup?.rotation.y ?? 0) * 100) / 100);
+  return {
+    n: game.crowdFigures.length,
+    armMin: Math.min(...arms), armMax: Math.max(...arms), // 舉手循環:最低(放下)vs 最高(過頭)
+    armSpread: Math.round((Math.max(...arms) - Math.min(...arms)) * 100) / 100, // >0 = 相位錯開的人浪
+    headSpread: Math.round((Math.max(...heads) - Math.min(...heads)) * 100) / 100, // >0 = 頭左右看且錯開
+  };
+}, G);
+results.crowd = crowd;
+await page.screenshot({ path: outDir + "/cy-crowd-cheer.png" });
 await page.evaluate((g) => { window[g].freeCam = false; }, G);
 
 // —— 驗收判定 ——
@@ -278,8 +310,11 @@ const checks = {
   sprintDrains: results.sprint.during.stamina < results.sprint.base.stamina,
   sprintRecovers: results.sprint.after.stamina > results.sprint.during.stamina,
   normalWinWithSprint: results.normalWin.phase === "ended" && /第一個衝線|勝利/.test(results.normalWin.overlay.title + results.normalWin.overlay.eyebrow),
-  glanceHeadTurns: results.glance.yaw > 0.25, // 頭+臉群組真的轉到左邊峰值(證明群組化生效)
-  glanceSmiles: results.glance.smileScale > 1.15, // 微笑 torus 短暫更彎/更明顯
+  glanceHeadTurns: results.glance.yaw > 0.5, // 頭+臉群組轉到「放大後」左看峰值(~0.6,證明放大生效)
+  glanceSmiles: results.glance.smileScale > 1.3, // 微笑 torus 放大到 ~1.4(明顯咧嘴)
+  crowdArmsRaise: results.crowd.armMin < -2.0, // 至少有人雙臂高舉過頭(歡呼)
+  crowdWave: results.crowd.armSpread > 1.0, // 手臂高低錯開=此起彼落的人浪(非整齊劃一)
+  crowdHeadLook: results.crowd.headSpread > 0.3, // 頭左右看且各人錯開
   zeroPageErrors: errors.length === 0,
 };
 const allGreen = Object.values(checks).every(Boolean);

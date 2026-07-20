@@ -247,8 +247,9 @@ function makeCyclist({ suit = 0x2f6f4e, trim = 0xf2e9d8, skin = 0xf3cca6, hair =
     const shell = new THREE.Mesh(new THREE.SphereGeometry(0.272, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.31), shellMat);
     shell.position.y = H(2.13);
     headGroup.add(shell);
+    // ★耳前無髮鐵律(戴帽同理):氣動尾只坐耳後(phi 1.06π~1.94π,前緣留在耳後 z<0),帽緣兩側不蓋耳前
     const shellBack = new THREE.Mesh(
-      new THREE.SphereGeometry(0.258, 16, 12, Math.PI * 0.74, Math.PI * 1.52, Math.PI * 0.14, Math.PI * 0.5),
+      new THREE.SphereGeometry(0.258, 16, 12, Math.PI * 1.06, Math.PI * 0.88, Math.PI * 0.14, Math.PI * 0.5),
       shellMat,
     );
     shellBack.position.y = H(2.17);
@@ -265,14 +266,17 @@ function makeCyclist({ suit = 0x2f6f4e, trim = 0xf2e9d8, skin = 0xf3cca6, hair =
     peak.rotation.x = 0.34;
     headGroup.add(peak);
   } else {
-    // 不戴:露出頭髮——髮際線也拉高到眉上,眼/眉/嘴全露
+    // 不戴:露出頭髮——★耳前無髮鐵律:髮片只從額頭上緣(髮際線高於眉)→頭頂/後腦披,
+    // 兩鬢與耳朵前方一律留空(髮片下緣是水平圈,落在眉上 y≈0.16,遠高於耳 y≈-0.01)。
     const capMat = new THREE.MeshStandardMaterial({ color: hair, roughness: 0.85 });
+    // 頭頂瓜皮帽:全周向淺帽,下緣圈落在額頭上緣(theta 0.32π → 下緣 y≈0.16,高於眉/眼/耳)→ 不碰兩鬢與耳
     const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.265, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.32), capMat);
     hairCap.position.y = H(2.14);
     headGroup.add(hairCap);
-    // 後腦頭髮:順著後上方披下來(蓋住後腦,不往前遮臉)
+    // 後腦頭髮:只披「耳後」半球(phi 1.06π~1.94π,兩側前緣一律留在耳朵之後 z<0),
+    // 絕不繞到耳前的臉頰/兩鬢;順著後上方披下蓋住後腦與後頸。
     const hairBack = new THREE.Mesh(
-      new THREE.SphereGeometry(0.258, 16, 12, Math.PI * 0.72, Math.PI * 1.56, Math.PI * 0.12, Math.PI * 0.62),
+      new THREE.SphereGeometry(0.258, 16, 12, Math.PI * 1.06, Math.PI * 0.88, Math.PI * 0.12, Math.PI * 0.62),
       capMat,
     );
     hairBack.position.y = H(2.13);
@@ -725,6 +729,7 @@ export class CyclingGame {
 
   buildCrowd() {
     this.crowd = new THREE.Group();
+    this.crowdFigures = []; // 收好每個觀眾人偶 + 決定性相位,供 animateCrowd 每幀驅動(舉手歡呼+左右看)
     const coats = [0xd98a3d, 0x3d78d9, 0xc94f8f, 0x4fae6a, 0xb0552f, 0x8a5ac0];
     for (const side of [-1, 1]) {
       for (let i = 0; i < 7; i += 1) {
@@ -745,9 +750,31 @@ export class CyclingGame {
         p.group.position.set(-27 + i * 9, 3.4, side * (BEND_R + 8.6));
         p.group.rotation.y = side > 0 ? Math.PI : 0;
         this.crowd.add(p.group);
+        // 相位=座號×0.9 + 對側偏移(決定性!絕不用建構期 Math.random)→ 此起彼落的人浪,不整齊劃一
+        this.crowdFigures.push({ f: p, phase: i * 0.9 + (side > 0 ? 1.7 : 0), rigY: p.rig.position.y });
       }
     }
     this.scene.add(this.crowd);
+  }
+
+  // 觀眾生動:每幀驅動(不論 phase 都跑)——舉手歡呼(雙臂上下循環)+ 頭左右緩慢擺看比賽,
+  // 各人用自己的相位錯開形成人浪;只改 rotation/position,不建新幾何(人偶多也輕量)。
+  animateCrowd() {
+    if (!this.crowdFigures) return;
+    const t = this.time;
+    for (const c of this.crowdFigures) {
+      const f = c.f;
+      const ph = c.phase;
+      // 頭(整顆 headGroup)左右緩慢擺看比賽(慢頻,±0.42 rad)
+      if (f.headGroup) f.headGroup.rotation.y = Math.sin(t * 0.9 + ph) * 0.42;
+      // 舉手歡呼:雙臂由放下(pivot.x≈-0.5)→高舉過頭(≈-2.9)循環,快頻;相位錯開=波浪
+      const raise = Math.sin(t * 2.4 + ph) * 0.5 + 0.5; // 0(放下)→1(高舉)
+      const lift = -0.5 - raise * 2.4;
+      if (f.leftArm) { f.leftArm.pivot.rotation.x = lift; f.leftArm.pivot.rotation.z = 0.22; f.leftArm.joint.rotation.x = -0.12; }
+      if (f.rightArm) { f.rightArm.pivot.rotation.x = lift; f.rightArm.pivot.rotation.z = -0.22; f.rightArm.joint.rotation.x = -0.12; }
+      // 隨歡呼微微踮起(舉高時身體上抬一點點,增加雀躍感;不誇張)
+      if (f.rig) f.rig.position.y = c.rigY + raise * 0.06;
+    }
   }
 
   // ---------- racer 結構(duel-2p-kit §7C:P1/P2/AI 同一套,只差輸入來源) ----------
@@ -1202,6 +1229,7 @@ export class CyclingGame {
     this.poseCyclist(this.opp);
     this.animateHead(this.p1); // idle 生動:偶爾往左看+微笑(P1 與對手都套,錯開相位)
     this.animateHead(this.opp);
+    this.animateCrowd(); // 觀眾舉手歡呼+左右看(每幀,相位錯開的人浪)
     this.placeRacer(this.p1);
     this.placeRacer(this.opp);
     this.updateCamera(delta);
@@ -1285,14 +1313,14 @@ export class CyclingGame {
     }
   }
 
-  // idle 生動:每隔 ~5-6 秒,整顆頭(headGroup)平滑往騎士左手邊瞥一下(+0.35 rad 維持 ~0.8s 再回正)
-  // + 配合微笑一下(smile torus 短暫更彎/更明顯);比賽踩踏中也照跑但幅度小巧不影響操作。
+  // idle 生動:每隔 ~5-6 秒,整顆頭(headGroup)平滑往騎士左手邊「明顯」瞥一下(+0.6 rad 維持 ~1s 再回正)
+  // + 配合「明顯咧嘴」笑一下(smile torus 短暫放大到 1.4);比賽踩踏中也照跑但平滑不影響操作。
   // 用 racer 自己的相位/週期錯開(不整齊劃一),不在建構期用被禁的 Math.random。
   animateHead(r) {
     const f = r && r.figure;
     if (!f || !f.headGroup) return;
     const period = r.glancePeriod || 5.4;
-    const glance = 1.4; // 一次往左看的視窗長度(rise 0.3 + hold ~0.8 + fall 0.3)
+    const glance = 1.6; // 一次往左看的視窗長度(rise 0.3 + hold ~1.0 + fall 0.3,停留略長)
     const t = (this.time + (r.glancePhase || 0)) % period;
     // k:0→1→0 的緩起緩收(smoothstep 梯形),full=1 段=「看著左邊」的停留
     let k = 0;
@@ -1303,12 +1331,12 @@ export class CyclingGame {
       else if (t > glance - ramp) raw = (glance - t) / ramp;
       k = raw * raw * (3 - 2 * raw); // smoothstep
     }
-    // 頭平滑轉到左邊(+0.35 rad = 往騎士左手邊),lerp 回正,絕不瞬跳
-    const targetYaw = 0.35 * k;
+    // 頭平滑轉到左邊(+0.6 rad = 明顯往騎士左手邊看),lerp 回正,絕不瞬跳
+    const targetYaw = 0.6 * k;
     f.headGroup.rotation.y += (targetYaw - f.headGroup.rotation.y) * 0.15;
-    // 微笑一下:smile 短暫放大到 ~1.25(更彎/更明顯),再平滑回復
+    // 微笑一下:smile 短暫放大到 ~1.4(明顯咧嘴笑),再平滑回復
     if (f.smile) {
-      const targetS = 1 + 0.25 * k;
+      const targetS = 1 + 0.4 * k;
       f.smile.scale.x += (targetS - f.smile.scale.x) * 0.15;
       f.smile.scale.y += (targetS - f.smile.scale.y) * 0.15;
     }
