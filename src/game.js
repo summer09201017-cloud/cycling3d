@@ -218,16 +218,25 @@ function makeCyclist({ suit = 0x2f6f4e, trim = 0xf2e9d8, skin = 0xf3cca6, hair =
   waist.add(hip);
   rig.add(waist);
 
+  // 頭+臉群組:整顆頭(頭球/耳/帽或髮/眼/瞳/眉/嘴)全收進 headGroup,樞紐=頭中心 T(2.12),
+  // 這樣 idle「偶爾往左看」時整顆頭連臉一起轉(舊版臉直接掛 torso → 只轉頭球臉不跟)。
+  // H(y)=以頭中心為原點的局部座標(= 原立姿 y − 2.12);headGroup 坐在 torso 的 T(2.12),
+  // 故 H(y)+T(2.12) = T(y) → 視覺位置與改動前逐一相同(戴帽/不戴帽兩態、露眼鐵則皆不變)。
+  const headGroup = new THREE.Group();
+  headGroup.position.set(0, T(2.12), 0);
+  torso.add(headGroup);
+  const H = (y) => y - 2.12;
+
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 18, 18), skinMat);
-  head.position.y = T(2.12);
-  torso.add(head);
+  head.position.y = H(2.12);
+  headGroup.add(head);
   const earL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), skinMat);
   earL.scale.set(0.45, 1, 0.8);
-  earL.position.set(-0.245, T(2.11), 0);
-  torso.add(earL);
+  earL.position.set(-0.245, H(2.11), 0);
+  headGroup.add(earL);
   const earR = earL.clone();
   earR.position.x = 0.245;
-  torso.add(earR);
+  headGroup.add(earR);
 
   // 安全帽(車手,helmet=true)或頭髮(不戴/觀眾)——★臉部鐵則:兩者都只坐在「額頭上緣/頭頂」,
   // 帽緣/髮際線一律高於眉(brow T(2.26))與眼(eye T(2.18)),絕不往前壓臉(舊版帽殼半球會蓋住眼)。
@@ -236,66 +245,66 @@ function makeCyclist({ suit = 0x2f6f4e, trim = 0xf2e9d8, skin = 0xf3cca6, hair =
     const shellMat = new THREE.MeshStandardMaterial({ color: suit, roughness: 0.32, metalness: 0.12 });
     // thetaLength 0.31π → 帽緣半徑 ≈0.22(略罩過頭 0.19),帽緣 y≈T(2.28) 高於眉毛 → 不遮眼/眉
     const shell = new THREE.Mesh(new THREE.SphereGeometry(0.272, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.31), shellMat);
-    shell.position.y = T(2.13);
-    torso.add(shell);
+    shell.position.y = H(2.13);
+    headGroup.add(shell);
     const shellBack = new THREE.Mesh(
       new THREE.SphereGeometry(0.258, 16, 12, Math.PI * 0.74, Math.PI * 1.52, Math.PI * 0.14, Math.PI * 0.5),
       shellMat,
     );
-    shellBack.position.y = T(2.17);
-    torso.add(shellBack);
+    shellBack.position.y = H(2.17);
+    headGroup.add(shellBack);
     const ventMat = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.5 });
     for (const dx of [-0.08, 0, 0.08]) {
       const vent = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.02, 0.22), ventMat);
-      vent.position.set(dx, T(2.37), -0.03);
-      torso.add(vent);
+      vent.position.set(dx, H(2.37), -0.03);
+      headGroup.add(vent);
     }
     // 前緣帽簷:在眉毛之上、朝前上翹(遮陽不遮眼)
     const peak = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.028, 0.12), shellMat);
-    peak.position.set(0, T(2.31), 0.2);
+    peak.position.set(0, H(2.31), 0.2);
     peak.rotation.x = 0.34;
-    torso.add(peak);
+    headGroup.add(peak);
   } else {
     // 不戴:露出頭髮——髮際線也拉高到眉上,眼/眉/嘴全露
     const capMat = new THREE.MeshStandardMaterial({ color: hair, roughness: 0.85 });
     const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.265, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.32), capMat);
-    hairCap.position.y = T(2.14);
-    torso.add(hairCap);
+    hairCap.position.y = H(2.14);
+    headGroup.add(hairCap);
     // 後腦頭髮:順著後上方披下來(蓋住後腦,不往前遮臉)
     const hairBack = new THREE.Mesh(
       new THREE.SphereGeometry(0.258, 16, 12, Math.PI * 0.72, Math.PI * 1.56, Math.PI * 0.12, Math.PI * 0.62),
       capMat,
     );
-    hairBack.position.y = T(2.13);
-    torso.add(hairBack);
+    hairBack.position.y = H(2.13);
+    headGroup.add(hairBack);
   }
 
   const faceDark = new THREE.MeshBasicMaterial({ color: 0x25201a });
   const faceWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), faceWhite);
-  eyeL.position.set(-0.09, T(2.18), 0.21);
-  torso.add(eyeL);
+  eyeL.position.set(-0.09, H(2.18), 0.21);
+  headGroup.add(eyeL);
   const eyeR = eyeL.clone();
   eyeR.position.x = 0.09;
-  torso.add(eyeR);
+  headGroup.add(eyeR);
   const pupilL = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), faceDark);
-  pupilL.position.set(-0.09, T(2.18), 0.25);
-  torso.add(pupilL);
+  pupilL.position.set(-0.09, H(2.18), 0.25);
+  headGroup.add(pupilL);
   const pupilR = pupilL.clone();
   pupilR.position.x = 0.09;
-  torso.add(pupilR);
+  headGroup.add(pupilR);
   const browL = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.02, 0.02), faceDark);
-  browL.position.set(-0.09, T(2.26), 0.22);
+  browL.position.set(-0.09, H(2.26), 0.22);
   browL.rotation.z = 0.16;
-  torso.add(browL);
+  headGroup.add(browL);
   const browR = browL.clone();
   browR.position.x = 0.09;
   browR.rotation.z = -0.16;
-  torso.add(browR);
+  headGroup.add(browR);
   const smile = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.014, 8, 14, Math.PI), faceDark);
-  smile.position.set(0, T(2.04), 0.21);
+  smile.position.set(0, H(2.04), 0.21);
   smile.rotation.z = Math.PI;
-  torso.add(smile);
+  headGroup.add(smile);
 
   const bootMat = new THREE.MeshStandardMaterial({ color: 0x241c14, roughness: 0.55 }); // 卡鞋(深色)
   const mkArm = (x) => {
@@ -431,7 +440,7 @@ function makeCyclist({ suit = 0x2f6f4e, trim = 0xf2e9d8, skin = 0xf3cca6, hair =
   }
 
   group.scale.setScalar(scale);
-  return { group, rig, torso, head, waist, leftArm, rightArm, leftLeg, rightLeg, smile, bike: bikeParts };
+  return { group, rig, torso, head, headGroup, waist, leftArm, rightArm, leftLeg, rightLeg, smile, bike: bikeParts };
 }
 
 // 自行車坐姿基準:前傾趴握把+屈膝踩踏板;踩踏動畫在 poseCyclist 疊加
@@ -743,10 +752,14 @@ export class CyclingGame {
 
   // ---------- racer 結構(duel-2p-kit §7C:P1/P2/AI 同一套,只差輸入來源) ----------
   mkRacer(figure, lane, label) {
+    const isP1 = label === "P1";
     return {
       figure,
       lane,
       label,
+      // idle 生動:偶爾往左看+微笑的節奏(用 label 錯開相位/週期,兩人不整齊劃一;絕不用建構期 Math.random)
+      glancePhase: isP1 ? 0 : 2.9,
+      glancePeriod: isP1 ? 5.4 : 6.3,
       dist: 0,
       speed: 0,
       strideT: 0,
@@ -1187,6 +1200,8 @@ export class CyclingGame {
 
     this.poseCyclist(this.p1);
     this.poseCyclist(this.opp);
+    this.animateHead(this.p1); // idle 生動:偶爾往左看+微笑(P1 與對手都套,錯開相位)
+    this.animateHead(this.opp);
     this.placeRacer(this.p1);
     this.placeRacer(this.opp);
     this.updateCamera(delta);
@@ -1267,6 +1282,35 @@ export class CyclingGame {
       f.leftArm.pivot.rotation.z = -0.4 * w + Math.sin(this.time * 18) * 0.25 * w;
       f.rightArm.pivot.rotation.z = 0.4 * w - Math.sin(this.time * 18) * 0.25 * w;
       f.torso.rotation.x = 0.6 + Math.sin(this.time * 15) * 0.06 * w;
+    }
+  }
+
+  // idle 生動:每隔 ~5-6 秒,整顆頭(headGroup)平滑往騎士左手邊瞥一下(+0.35 rad 維持 ~0.8s 再回正)
+  // + 配合微笑一下(smile torus 短暫更彎/更明顯);比賽踩踏中也照跑但幅度小巧不影響操作。
+  // 用 racer 自己的相位/週期錯開(不整齊劃一),不在建構期用被禁的 Math.random。
+  animateHead(r) {
+    const f = r && r.figure;
+    if (!f || !f.headGroup) return;
+    const period = r.glancePeriod || 5.4;
+    const glance = 1.4; // 一次往左看的視窗長度(rise 0.3 + hold ~0.8 + fall 0.3)
+    const t = (this.time + (r.glancePhase || 0)) % period;
+    // k:0→1→0 的緩起緩收(smoothstep 梯形),full=1 段=「看著左邊」的停留
+    let k = 0;
+    if (t < glance) {
+      const ramp = 0.3;
+      let raw = 1;
+      if (t < ramp) raw = t / ramp;
+      else if (t > glance - ramp) raw = (glance - t) / ramp;
+      k = raw * raw * (3 - 2 * raw); // smoothstep
+    }
+    // 頭平滑轉到左邊(+0.35 rad = 往騎士左手邊),lerp 回正,絕不瞬跳
+    const targetYaw = 0.35 * k;
+    f.headGroup.rotation.y += (targetYaw - f.headGroup.rotation.y) * 0.15;
+    // 微笑一下:smile 短暫放大到 ~1.25(更彎/更明顯),再平滑回復
+    if (f.smile) {
+      const targetS = 1 + 0.25 * k;
+      f.smile.scale.x += (targetS - f.smile.scale.x) * 0.15;
+      f.smile.scale.y += (targetS - f.smile.scale.y) * 0.15;
     }
   }
 

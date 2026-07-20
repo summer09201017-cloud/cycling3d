@@ -1,5 +1,5 @@
 // 網路優先 HTML+快取優先資產(07-13 修復:cache-first 舊 index 會在部署後 404 壞站)
-const CACHE_NAME = "cycling3d-nf3"; // nf3:安全帽開關(露眼)+車身加高加長+衝刺體力條;nf1 首發(fork speedskating3d)
+const CACHE_NAME = "cycling3d-nf4"; // nf4:騎士 idle 生動(頭+臉 headGroup 群組化,偶爾往左看+微笑一下);nf3 安全帽開關+車身加高;nf1 首發(fork speedskating3d)
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {

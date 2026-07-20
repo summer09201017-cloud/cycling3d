@@ -221,6 +221,48 @@ await page.waitForTimeout(500);
 results.normalWin = await snap();
 await page.screenshot({ path: outDir + "/cy-normal-win.png" });
 
+// —— ⑧ idle 生動:頭+臉群組往左看到峰值 + 微笑,截圖證明「整顆頭連臉一起轉、眼睛還在」——
+// 手法:把 P1 的 glancePhase 對到「停留看左」視窗中段(k=1),讓 animateHead 自然把 headGroup.rotation.y
+// 平滑 lerp 到 +0.35 峰值並停住(不瞬跳);再 freeCam 從正面拍 → 臉明顯轉向一側但眼睛/瞳孔仍露。
+const pinGlance = (g) => {
+  const game = window[g];
+  const r = game.p1;
+  const period = r.glancePeriod || 5.4;
+  r.glancePhase = 0.45 - (game.time % period); // t≈0.45 落在停留視窗(ramp 0.3~1.1)中段
+};
+await openMode("race", "normal");
+await page.waitForTimeout(250);
+await page.evaluate(pinGlance, G);
+await page.waitForTimeout(450); // 每幀 lerp 0.15 → ~0.3s 收斂到 +0.35 峰值
+const glance = await page.evaluate((g) => {
+  const game = window[g];
+  const f = game.p1.figure;
+  return {
+    yaw: Math.round(f.headGroup.rotation.y * 1000) / 1000,
+    smileScale: Math.round(f.smile.scale.x * 1000) / 1000,
+  };
+}, G);
+results.glance = glance;
+await page.evaluate((g) => {
+  const game = window[g];
+  const r = game.p1;
+  const period = r.glancePeriod || 5.4;
+  r.glancePhase = 0.45 - (game.time % period); // 抵銷等待推進的 time,重新對到停留中段
+  game.freeCam = true;
+  const V = game.camera.position.constructor;
+  const grp = game.p1.figure.group;
+  const hp = game.p1.figure.head.getWorldPosition(new V());
+  const fx = Math.sin(grp.rotation.y);
+  const fz = Math.cos(grp.rotation.y);
+  game.camera.position.set(hp.x + fx * 1.9, hp.y + 0.06, hp.z + fz * 1.9);
+  game.camera.lookAt(hp.x, hp.y, hp.z);
+  game.camera.fov = 34;
+  game.camera.updateProjectionMatrix();
+}, G);
+await page.waitForTimeout(200);
+await page.screenshot({ path: outDir + "/cy-glance-left.png" });
+await page.evaluate((g) => { window[g].freeCam = false; }, G);
+
 // —— 驗收判定 ——
 const checks = {
   kidsSpeedUp: results.kidsSkating.p1.speed > 3,
@@ -236,6 +278,8 @@ const checks = {
   sprintDrains: results.sprint.during.stamina < results.sprint.base.stamina,
   sprintRecovers: results.sprint.after.stamina > results.sprint.during.stamina,
   normalWinWithSprint: results.normalWin.phase === "ended" && /第一個衝線|勝利/.test(results.normalWin.overlay.title + results.normalWin.overlay.eyebrow),
+  glanceHeadTurns: results.glance.yaw > 0.25, // 頭+臉群組真的轉到左邊峰值(證明群組化生效)
+  glanceSmiles: results.glance.smileScale > 1.15, // 微笑 torus 短暫更彎/更明顯
   zeroPageErrors: errors.length === 0,
 };
 const allGreen = Object.values(checks).every(Boolean);
