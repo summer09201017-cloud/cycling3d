@@ -461,7 +461,7 @@ export class CyclingGame {
     this.time = 0;
     this.phase = "menu"; // menu | gate | skating | ended
     this.message = "在首頁選擇模式與難度後開始。";
-    this.cameraView = 0; // 0 跟隨 1 側面轉播 2 高空 3 貼地視角
+    this.cameraView = 0; // 0 跟隨 1 側面轉播(右) 2 高空 3 貼地 4 側面轉播(左) —— 共 5 視角
     this.autoSaveTimer = 0;
     this.elapsed = 0;
     this.overlay = { visible: false, eyebrow: "", title: "", text: "", canResume: false };
@@ -981,8 +981,8 @@ export class CyclingGame {
   }
 
   cycleCameraView() {
-    this.cameraView = (this.cameraView + 1) % 4;
-    const names = ["跟隨視角", "側面轉播", "高空俯瞰", "貼地視角"];
+    this.cameraView = (this.cameraView + 1) % 5;
+    const names = ["跟隨視角", "側面轉播(右)", "高空俯瞰", "貼地視角", "側面轉播(左)"];
     this.message = `視角:${names[this.cameraView]}。`;
     this.pushHud();
   }
@@ -1259,9 +1259,14 @@ export class CyclingGame {
     } else if (this.cameraView === 2) {
       desiredPos = new THREE.Vector3(p.x + 3, 30, p.z + 3);
       desiredLook = new THREE.Vector3(p.x + p.tx * 6, 0.5, p.z + p.tz * 6);
-    } else {
+    } else if (this.cameraView === 3) {
       desiredPos = new THREE.Vector3(p.x - p.tx * 1.2, 1.5, p.z - p.tz * 1.2);
       desiredLook = new THREE.Vector3(p.x + p.tx * 12, 1.0, p.z + p.tz * 12);
+    } else {
+      // 4 側面轉播(左):view 1(右,外側 lane+13)的鏡像——從賽道另一側(內側 lane-13)同高度看選手,拍到相反的一隻手
+      const other = ovalPoint(r.dist, r.lane - 13);
+      desiredPos = new THREE.Vector3(other.x, 4.2, other.z);
+      desiredLook = new THREE.Vector3(p.x, 1.1, p.z);
     }
     const k = 1 - Math.exp(-delta * 3.4);
     this.camPos.lerp(desiredPos, k);
