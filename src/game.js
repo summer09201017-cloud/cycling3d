@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { InputManager } from "./input.js";
 import { loadSettings, saveSettings, loadSavedGame, saveGameState, loadHelmet, saveHelmet } from "./storage.js";
+import { animateIdleHead, animateCrowdCheer } from "./idle-life.js"; // idle 生動已抽成 3d-figure-kit 共用資產
 
 // —— 3D 自行車競速(cycling3d)——fork 自 speedskating3d(2026-07-20 換皮)。
 // 賽道:自行車賽道橢圓(兩直道+兩個 180° 彎道)——沿用「一切以里程 dist 為域」的閉環範式,
@@ -751,30 +752,17 @@ export class CyclingGame {
         p.group.rotation.y = side > 0 ? Math.PI : 0;
         this.crowd.add(p.group);
         // 相位=座號×0.9 + 對側偏移(決定性!絕不用建構期 Math.random)→ 此起彼落的人浪,不整齊劃一
-        this.crowdFigures.push({ f: p, phase: i * 0.9 + (side > 0 ? 1.7 : 0), rigY: p.rig.position.y });
+        // fig 鍵名=idle-life.js animateCrowdCheer 的契約([{fig,phase,rigY}])
+        this.crowdFigures.push({ fig: p, phase: i * 0.9 + (side > 0 ? 1.7 : 0), rigY: p.rig.position.y });
       }
     }
     this.scene.add(this.crowd);
   }
 
-  // 觀眾生動:每幀驅動(不論 phase 都跑)——舉手歡呼(雙臂上下循環)+ 頭左右緩慢擺看比賽,
-  // 各人用自己的相位錯開形成人浪;只改 rotation/position,不建新幾何(人偶多也輕量)。
+  // 觀眾生動:每幀驅動(不論 phase 都跑)——舉手歡呼+頭左右擺看比賽,相位錯開成人浪。
+  // 邏輯已抽成 3d-figure-kit 共用資產 idle-life.js 的 animateCrowdCheer(行為不變)。
   animateCrowd() {
-    if (!this.crowdFigures) return;
-    const t = this.time;
-    for (const c of this.crowdFigures) {
-      const f = c.f;
-      const ph = c.phase;
-      // 頭(整顆 headGroup)左右緩慢擺看比賽(慢頻,±0.42 rad)
-      if (f.headGroup) f.headGroup.rotation.y = Math.sin(t * 0.9 + ph) * 0.42;
-      // 舉手歡呼:雙臂由放下(pivot.x≈-0.5)→高舉過頭(≈-2.9)循環,快頻;相位錯開=波浪
-      const raise = Math.sin(t * 2.4 + ph) * 0.5 + 0.5; // 0(放下)→1(高舉)
-      const lift = -0.5 - raise * 2.4;
-      if (f.leftArm) { f.leftArm.pivot.rotation.x = lift; f.leftArm.pivot.rotation.z = 0.22; f.leftArm.joint.rotation.x = -0.12; }
-      if (f.rightArm) { f.rightArm.pivot.rotation.x = lift; f.rightArm.pivot.rotation.z = -0.22; f.rightArm.joint.rotation.x = -0.12; }
-      // 隨歡呼微微踮起(舉高時身體上抬一點點,增加雀躍感;不誇張)
-      if (f.rig) f.rig.position.y = c.rigY + raise * 0.06;
-    }
+    animateCrowdCheer(this.crowdFigures, this.time);
   }
 
   // ---------- racer 結構(duel-2p-kit §7C:P1/P2/AI 同一套,只差輸入來源) ----------
@@ -1313,33 +1301,16 @@ export class CyclingGame {
     }
   }
 
-  // idle 生動:每隔 ~5-6 秒,整顆頭(headGroup)平滑往騎士左手邊「明顯」瞥一下(+0.6 rad 維持 ~1s 再回正)
-  // + 配合「明顯咧嘴」笑一下(smile torus 短暫放大到 1.4);比賽踩踏中也照跑但平滑不影響操作。
-  // 用 racer 自己的相位/週期錯開(不整齊劃一),不在建構期用被禁的 Math.random。
+  // idle 生動:整顆頭(headGroup)偶爾平滑往騎士左手邊「明顯」瞥一下(+0.6 rad)+咧嘴笑(1.4);
+  // 用 racer 自己的相位/週期錯開。邏輯已抽成 3d-figure-kit 共用資產 idle-life.js 的
+  // animateIdleHead(行為不變;yaw/smile 默認即 0.6/1.4,period/phase 由 racer 帶入)。
   animateHead(r) {
     const f = r && r.figure;
-    if (!f || !f.headGroup) return;
-    const period = r.glancePeriod || 5.4;
-    const glance = 1.6; // 一次往左看的視窗長度(rise 0.3 + hold ~1.0 + fall 0.3,停留略長)
-    const t = (this.time + (r.glancePhase || 0)) % period;
-    // k:0→1→0 的緩起緩收(smoothstep 梯形),full=1 段=「看著左邊」的停留
-    let k = 0;
-    if (t < glance) {
-      const ramp = 0.3;
-      let raw = 1;
-      if (t < ramp) raw = t / ramp;
-      else if (t > glance - ramp) raw = (glance - t) / ramp;
-      k = raw * raw * (3 - 2 * raw); // smoothstep
-    }
-    // 頭平滑轉到左邊(+0.6 rad = 明顯往騎士左手邊看),lerp 回正,絕不瞬跳
-    const targetYaw = 0.6 * k;
-    f.headGroup.rotation.y += (targetYaw - f.headGroup.rotation.y) * 0.15;
-    // 微笑一下:smile 短暫放大到 ~1.4(明顯咧嘴笑),再平滑回復
-    if (f.smile) {
-      const targetS = 1 + 0.4 * k;
-      f.smile.scale.x += (targetS - f.smile.scale.x) * 0.15;
-      f.smile.scale.y += (targetS - f.smile.scale.y) * 0.15;
-    }
+    if (!f) return;
+    animateIdleHead(f.headGroup, f.smile, this.time, {
+      phase: r.glancePhase || 0,
+      period: r.glancePeriod || 5.4,
+    });
   }
 
   updateCamera(delta) {
