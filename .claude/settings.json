@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/pre-push-deploy-route-hook.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/pre-scripture-cuv-hook.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/pre-push-cuv-gate-hook.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/pre-deploy-overflow-hook.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/post-build-size-guard-hook.mjs",
+            "statusMessage": "檢查 build 產物大小…"
+          }
+        ]
+      }
+    ]
+  }
+}

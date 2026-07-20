@@ -1,0 +1,49 @@
+// 網路優先 HTML+快取優先資產(07-13 修復:cache-first 舊 index 會在部署後 404 壞站)
+const CACHE_NAME = "cycling3d-nf1"; // nf1:3D 自行車競速 首發(fork 自 speedskating3d)
+const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS).catch(() => {})).then(() => self.skipWaiting()),
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.map((key) => (key !== CACHE_NAME ? caches.delete(key) : Promise.resolve()))))
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") return;
+
+  // HTML/導覽:網路優先(拿到就更新快取),離線才用快取——部署新版立即生效
+  if (request.mode === "navigate" || request.destination === "document") {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          return res;
+        })
+        .catch(() => caches.match(request).then((c) => c || caches.match("/"))),
+    );
+    return;
+  }
+
+  // 其他資產(vite hashed 檔名=不可變):快取優先,沒有才抓網路回填
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return fetch(request).then((res) => {
+        if (request.url.startsWith(self.location.origin) && res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        }
+        return res;
+      }).catch(() => caches.match("/"));
+    }),
+  );
+});

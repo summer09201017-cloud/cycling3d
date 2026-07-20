@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0d2334" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <title>3D 自行車競速 Cycling 3D</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <canvas id="gameCanvas" aria-label="3D 自行車競速 遊戲畫面"></canvas>
+
+      <div class="top-bar">
+        <div class="score-card team-home">
+          <span class="score-label">名次</span>
+          <strong id="rankLabel">—</strong>
+        </div>
+        <div class="center-board">
+          <div class="clock-stack period-stack">
+            <span class="mini-label">模式</span>
+            <strong id="modeCode">競速</strong>
+          </div>
+          <div class="clock-stack">
+            <span class="mini-label">圈數</span>
+            <strong id="lapLabel">1/3</strong>
+            <span class="stack-subtext" id="timeLabel">0:00.0</span>
+          </div>
+          <div class="clock-stack accent">
+            <span class="mini-label">節奏</span>
+            <strong id="rhythmTopLabel">—</strong>
+            <span class="stack-subtext" id="phaseLabel">主選單</span>
+          </div>
+        </div>
+        <div class="score-card team-away">
+          <span class="score-label">速度</span>
+          <strong id="speedTopLabel">0 km/h</strong>
+        </div>
+      </div>
+
+      <button id="pauseButton" class="pause-fab">暫停</button>
+
+      <canvas id="miniMap" class="mini-map" width="190" height="140" hidden aria-label="賽道小地圖"></canvas>
+
+      <div class="message-ribbon" id="statusMessage">選擇模式後開始比賽。</div>
+      <div class="commentary-bar" id="commentaryBar" hidden></div>
+
+      <aside class="side-panel">
+        <div class="panel-block hero-panel">
+          <p class="eyebrow">Cycling 3D</p>
+          <h1>3D 自行車競速</h1>
+          <p class="panel-copy">
+            左右交替踩踏板、進彎按住傾身——節奏穩才快,先騎完全部圈數就贏!
+          </p>
+        </div>
+
+        <div class="panel-block compact-grid">
+          <div>
+            <span class="mini-label">遊戲模式</span>
+            <strong id="modeLabel">單人競速</strong>
+          </div>
+          <div>
+            <span class="mini-label">難度</span>
+            <strong id="difficultyLabel">標準</strong>
+          </div>
+          <div>
+            <span class="mini-label">領先/落後</span>
+            <strong id="gapLabel">—</strong>
+          </div>
+          <div>
+            <span class="mini-label">圈數</span>
+            <strong id="lapSideLabel">—</strong>
+          </div>
+          <div>
+            <span class="mini-label">速度</span>
+            <strong id="speedLabel">0 km/h</strong>
+          </div>
+          <div>
+            <span class="mini-label">音效狀態</span>
+            <strong id="audioStatus">開啟</strong>
+          </div>
+          <div>
+            <span class="mini-label">最佳成績</span>
+            <strong id="saveStatus">尚無</strong>
+          </div>
+        </div>
+
+        <div class="panel-block meter-block">
+          <div class="meter-copy">
+            <span class="mini-label">速度</span>
+            <strong id="speedMeterText">左右交替踩踏板</strong>
+          </div>
+          <div class="meter-track">
+            <div id="speedMeterFill" class="meter-fill shot"></div>
+          </div>
+
+          <div class="meter-copy stamina-copy">
+            <span class="mini-label">節奏穩定度(左右交替)</span>
+            <strong id="rhythmValue">—</strong>
+          </div>
+          <div class="meter-track">
+            <div id="rhythmFill" class="meter-fill shot"></div>
+          </div>
+
+          <div class="meter-copy stamina-copy">
+            <span class="mini-label">彎道(按住傾身不減速)</span>
+            <strong id="bendValue">—</strong>
+          </div>
+          <div class="meter-track stamina">
+            <div id="bendFill" class="meter-fill stamina-fill"></div>
+          </div>
+        </div>
+
+        <div class="panel-block action-buttons">
+          <button id="menuButton" class="primary">首頁選單</button>
+          <button id="loadButton">最佳成績</button>
+          <button id="audioButton">音效開啟</button>
+          <button id="cameraButton">視角切換</button>
+        </div>
+
+        <div class="panel-block">
+          <button id="installButton" class="install-button" hidden>安裝到手機</button>
+          <p class="install-hint" id="installHint">
+            Android 可直接安裝；iPhone 可用分享選單加入主畫面。
+          </p>
+        </div>
+
+        <div class="panel-block instructions">
+          <p class="mini-label">操作</p>
+          <p>出發: 空白鍵或點畫面</p>
+          <p>P1 踩踏: A / D 左右交替｜傾身: 按住 W</p>
+          <p>P2(雙人): ← / → 交替｜傾身: 按住 ↑</p>
+          <p>單人時方向鍵也可以玩(等同 A/D/W)</p>
+          <p>平板: 點畫面=自動交替踩,「傾身」鈕過彎</p>
+          <p>視角切換: V｜暫停: Esc / P</p>
+        </div>
+      </aside>
+
+      <div class="touch-layer" id="touchControls">
+        <div class="dpad">
+          <button data-action="p1left" aria-label="左踩">◀ 左踩</button>
+          <button data-action="p1right" aria-label="右踩">右踩 ▶</button>
+        </div>
+        <div class="action-pad">
+          <button data-action="p1lean" class="shoot">傾身</button>
+          <button data-action="camera">視角</button>
+        </div>
+      </div>
+
+      <div class="overlay-shell" id="matchOverlay" aria-live="polite">
+        <div class="overlay-card">
+          <p class="eyebrow" id="overlayEyebrow">比賽暫停</p>
+          <h2 id="overlayTitle">暫停中</h2>
+          <p id="overlayText" class="overlay-copy">準備好再回到賽道上。</p>
+          <div class="button-row overlay-actions">
+            <button id="resumeButton" class="primary">繼續比賽</button>
+            <button id="overlayMenuButton">回到首頁</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-screen visible" id="homeScreen" aria-live="polite">
+        <div class="home-backdrop"></div>
+        <div class="home-content">
+          <div class="home-hero">
+            <p class="eyebrow">Cycling 3D</p>
+            <h2>踩節奏、傾身過彎、衝線!</h2>
+            <p>
+              左右交替按鍵=踩踏板,交替且節奏穩=越騎越快;連按同側或太急=踉蹌掉速(不會摔倒)。進彎道按住傾身鍵,內傾過彎不減速!
+            </p>
+          </div>
+
+          <div class="home-grid">
+            <section class="home-card">
+              <p class="eyebrow">遊戲模式</p>
+              <div class="mode-card-grid" id="modeCardGrid">
+                <button class="mode-card" data-mode="race">
+                  <strong>單人競速</strong>
+                  <span>跟 AI 車手內外道對決,先衝線的贏</span>
+                </button>
+                <button class="mode-card" data-mode="duel2p">
+                  <strong>雙人同機</strong>
+                  <span>P1(紅)=A/D+W;P2(藍)=←/→+↑</span>
+                </button>
+                <button class="mode-card" data-mode="practice">
+                  <strong>練習場</strong>
+                  <span>無限圈數,自由練節奏與傾身</span>
+                </button>
+              </div>
+              <p id="modeDescription" class="mode-description"></p>
+            </section>
+
+            <section class="home-card">
+              <p class="eyebrow">比賽設定</p>
+              <label class="field-label" for="menuDifficultySelect">難度(定圈數與 AI 快慢)</label>
+              <select id="menuDifficultySelect">
+                <option value="kids">幼兒（超簡單・2圈）</option>
+                <option value="child">兒童（簡單・2圈）</option>
+                <option value="easy">入門（2圈）</option>
+                <option value="normal">標準（3圈）</option>
+                <option value="hard">職業（3圈）</option>
+              </select>
+
+              <label class="field-label" for="audioSelect">音效與播報</label>
+              <select id="audioSelect">
+                <option value="on">開啟</option>
+                <option value="off">靜音</option>
+              </select>
+
+              <div class="home-mode-meta">
+                <div>
+                  <span class="mini-label">模式摘要</span>
+                  <strong id="modeMetaTitle">單人競速</strong>
+                </div>
+                <div>
+                  <span class="mini-label">目標</span>
+                  <strong id="modeMetaGoal">先衝線者勝</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="button-row home-actions">
+            <button id="startMatchButton" class="primary">開始比賽</button>
+            <button id="continueSavedButton">看最佳成績</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <div class="power-panel-big" id="bigPower" hidden><span id="bigPowerLabel">節奏(左右交替)</span><div class="big-track"><div class="big-fill" id="bigPowerFill"></div></div></div>
+    <script type="module" src="/src/main.js"></script>
+  <script>
+// play-stats 打點(雙平台版:CF Pages/Netlify 都會打;只擋本機開發)
+window.psPing = function (suffix, t) {
+  try {
+    if (['localhost', '127.0.0.1'].includes(location.hostname)) return;
+    var q = 'g=cycling3d' + (suffix || '') + (t != null ? '&t=' + Math.round(t) : '');
+    navigator.sendBeacon?.('https://hfpc-play-stats.summer09201017.workers.dev/api/ping?' + q);
+  } catch (_) {}
+};
+window.psPing('');
+</script>
+</body>
+</html>

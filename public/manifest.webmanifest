@@ -1,0 +1,24 @@
+{
+  "name": "3D 自行車競速",
+  "short_name": "3D單車",
+  "description": "可在手機與 PC 遊玩的 3D 自行車競速——左右交替踩節奏踏板、彎道傾身過彎,單人對 AI 或雙人同機競速!",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a1824",
+  "theme_color": "#0d2334",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
