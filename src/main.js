@@ -35,6 +35,14 @@ const ui = {
   rhythmValue: document.querySelector("#rhythmValue"),
   bendFill: document.querySelector("#bendFill"),
   bendValue: document.querySelector("#bendValue"),
+  staminaFill: document.querySelector("#staminaFill"),
+  staminaValue: document.querySelector("#staminaValue"),
+  p2StaminaRow: document.querySelector("#p2StaminaRow"),
+  p2StaminaTrack: document.querySelector("#p2StaminaTrack"),
+  p2StaminaFill: document.querySelector("#p2StaminaFill"),
+  p2StaminaValue: document.querySelector("#p2StaminaValue"),
+  speedLines: document.querySelector("#speedLines"),
+  helmetSelect: document.querySelector("#helmetSelect"),
   matchOverlay: document.querySelector("#matchOverlay"),
   overlayEyebrow: document.querySelector("#overlayEyebrow"),
   overlayTitle: document.querySelector("#overlayTitle"),
@@ -102,6 +110,7 @@ function syncMenuCards() {
 
 function syncMenuControls() {
   ui.menuDifficultySelect.value = selectedDifficulty;
+  ui.helmetSelect.value = game.helmet ? "on" : "off";
   syncMenuCards();
 }
 
@@ -262,6 +271,26 @@ game.onHudUpdate = (state) => {
   // 彎道傾身指示
   setMeterFill(ui.bendFill, state.inBend ? 1 : 0);
   ui.bendValue.textContent = !state.skating ? "—" : state.inBend ? (state.leanOk ? "傾身中 ✓" : "進彎!按住傾身!") : "直道";
+  // 衝刺體力條(P1;雙人另顯示 P2)——衝刺中發光脈動、低量轉紅、空了提示
+  {
+    const s = state.stamina01 ?? 1;
+    setMeterFill(ui.staminaFill, s);
+    ui.staminaFill.classList.toggle("active", !!state.p1Sprinting);
+    ui.staminaFill.classList.toggle("low", s < 0.25);
+    ui.staminaValue.textContent = !state.skating ? "滿" : state.p1Sprinting ? "衝刺中!" : s < 0.12 ? "沒力了" : `${Math.round(s * 100)}%`;
+    const showP2 = state.duel;
+    ui.p2StaminaRow.style.display = showP2 ? "flex" : "none"; // 行內樣式蓋過 .meter-copy 的 display:flex
+    ui.p2StaminaTrack.style.display = showP2 ? "block" : "none";
+    if (showP2) {
+      const s2 = state.p2Stamina01 ?? 1;
+      setMeterFill(ui.p2StaminaFill, s2);
+      ui.p2StaminaFill.classList.toggle("active", !!state.p2Sprinting);
+      ui.p2StaminaFill.classList.toggle("low", s2 < 0.25);
+      ui.p2StaminaValue.textContent = state.p2Sprinting ? "衝刺中!" : s2 < 0.12 ? "沒力了" : `${Math.round(s2 * 100)}%`;
+    }
+  }
+  // 衝刺速度線覆蓋層
+  ui.speedLines.classList.toggle("on", !!state.sprinting);
   { // 中下方大節奏條:滑行中顯示;節奏>0.8=發光;進彎變傾身提示
     const bp = document.getElementById("bigPower"), bf = document.getElementById("bigPowerFill"), bl = document.getElementById("bigPowerLabel");
     if (bp) {
@@ -334,6 +363,11 @@ ui.modeCardGrid.addEventListener("click", (event) => {
 ui.menuDifficultySelect.addEventListener("change", (event) => {
   selectedDifficulty = event.target.value;
   persistSettings();
+});
+
+ui.helmetSelect.addEventListener("change", (event) => {
+  audio.uiTap();
+  game.setHelmet(event.target.value === "on"); // 存檔+重建車手(戴/不戴)
 });
 
 ui.audioSelect.addEventListener("change", (event) => {

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { InputManager } from "./input.js";
-import { loadSettings, saveSettings, loadSavedGame, saveGameState } from "./storage.js";
+import { loadSettings, saveSettings, loadSavedGame, saveGameState, loadHelmet, saveHelmet } from "./storage.js";
 
 // —— 3D 自行車競速(cycling3d)——fork 自 speedskating3d(2026-07-20 換皮)。
 // 賽道:自行車賽道橢圓(兩直道+兩個 180° 彎道)——沿用「一切以里程 dist 為域」的閉環範式,
@@ -18,8 +18,8 @@ export const DIFFICULTY_PRESETS = {
   kids: { push: 0.2, ideal: 0.46, tol: 0.62, maxSpeed: 10.0, laps: 2, assist: 0.55, aiSkill: 0.3, aiLean: 0.35 },
   child: { push: 0.19, ideal: 0.42, tol: 0.55, maxSpeed: 11.5, laps: 2, assist: 0.32, aiSkill: 0.46, aiLean: 0.55 },
   easy: { push: 0.18, ideal: 0.4, tol: 0.48, maxSpeed: 13.0, laps: 2, assist: 0.15, aiSkill: 0.58, aiLean: 0.72 },
-  normal: { push: 0.17, ideal: 0.37, tol: 0.42, maxSpeed: 15.0, laps: 3, assist: 0, aiSkill: 0.7, aiLean: 0.88 },
-  hard: { push: 0.165, ideal: 0.33, tol: 0.34, maxSpeed: 17.5, laps: 3, assist: 0, aiSkill: 0.84, aiLean: 1 },
+  normal: { push: 0.17, ideal: 0.37, tol: 0.42, maxSpeed: 15.0, laps: 3, assist: 0, aiSkill: 0.66, aiLean: 0.86 },
+  hard: { push: 0.165, ideal: 0.33, tol: 0.34, maxSpeed: 17.5, laps: 3, assist: 0, aiSkill: 0.8, aiLean: 1 },
 };
 
 export const DIFFICULTY_LABELS = {
@@ -75,6 +75,12 @@ const TAP_TOO_FAST = 0.14; // 比這更快的連打=踏頻打結(踩空)
 const STUMBLE_DUR = 0.9; // 踉蹌恢復秒數
 const BEND_DRAG_NOLEAN = 0.5; // 彎道沒傾身的自然減速(溫柔)
 const BASE_DRAG = 0.1; // 直道滑行衰減(有「踩一下衝出去」的慣性感)
+// —— 衝刺(sprint):按住加速鍵→更高速度上限+踩踏增益;吃體力條 stamina,空了不能衝 ——
+const SPRINT_SPEED_MULT = 1.34; // 衝刺時速度上限倍率(明顯更快)
+const SPRINT_GAIN_MULT = 1.6; // 衝刺時每次踩踏增益倍率
+const SPRINT_DRAIN = 0.42; // 衝刺每秒消耗體力(滿條約 2.4s 用完)
+const SPRINT_RECOVER = 0.26; // 不衝時每秒回復體力(約 3.8s 回滿)
+const SPRINT_MIN_START = 0.12; // 體力低於此不能「起衝」(避免空條亂點)
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
@@ -223,42 +229,44 @@ function makeCyclist({ suit = 0x2f6f4e, trim = 0xf2e9d8, skin = 0xf3cca6, hair =
   earR.position.x = 0.245;
   torso.add(earR);
 
-  // 安全帽(車手)或頭髮(觀眾)
+  // 安全帽(車手,helmet=true)或頭髮(不戴/觀眾)——★臉部鐵則:兩者都只坐在「額頭上緣/頭頂」,
+  // 帽緣/髮際線一律高於眉(brow T(2.26))與眼(eye T(2.18)),絕不往前壓臉(舊版帽殼半球會蓋住眼)。
   if (helmet) {
-    // 空氣力學安全帽:光滑外殼(隊色)+ 白色通風條 + 前緣帽簷
+    // 空氣力學安全帽:淺帽殼坐頭頂(帽緣落在 T(2.28)≈額頭上緣)+ 後腦氣動尾 + 白通風條 + 眉上帽簷
     const shellMat = new THREE.MeshStandardMaterial({ color: suit, roughness: 0.32, metalness: 0.12 });
-    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.288, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.6), shellMat);
-    shell.position.y = T(2.15);
-    shell.rotation.x = -0.12;
+    // thetaLength 0.31π → 帽緣半徑 ≈0.22(略罩過頭 0.19),帽緣 y≈T(2.28) 高於眉毛 → 不遮眼/眉
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.272, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.31), shellMat);
+    shell.position.y = T(2.13);
     torso.add(shell);
     const shellBack = new THREE.Mesh(
-      new THREE.SphereGeometry(0.27, 16, 8, Math.PI, Math.PI, Math.PI * 0.32, Math.PI * 0.34),
+      new THREE.SphereGeometry(0.258, 16, 12, Math.PI * 0.74, Math.PI * 1.52, Math.PI * 0.14, Math.PI * 0.5),
       shellMat,
     );
-    shellBack.position.y = T(2.12);
+    shellBack.position.y = T(2.17);
     torso.add(shellBack);
     const ventMat = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.5 });
-    for (const dx of [-0.085, 0, 0.085]) {
-      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.32), ventMat);
-      vent.position.set(dx, T(2.33), 0.02);
-      vent.rotation.x = -0.12;
+    for (const dx of [-0.08, 0, 0.08]) {
+      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.02, 0.22), ventMat);
+      vent.position.set(dx, T(2.37), -0.03);
       torso.add(vent);
     }
-    const peak = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.03, 0.12), shellMat);
-    peak.position.set(0, T(2.28), 0.25);
-    peak.rotation.x = 0.22;
+    // 前緣帽簷:在眉毛之上、朝前上翹(遮陽不遮眼)
+    const peak = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.028, 0.12), shellMat);
+    peak.position.set(0, T(2.31), 0.2);
+    peak.rotation.x = 0.34;
     torso.add(peak);
   } else {
+    // 不戴:露出頭髮——髮際線也拉高到眉上,眼/眉/嘴全露
     const capMat = new THREE.MeshStandardMaterial({ color: hair, roughness: 0.85 });
-    const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.265, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.46), capMat);
-    hairCap.position.y = T(2.13);
-    hairCap.rotation.x = -0.22;
+    const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.265, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.32), capMat);
+    hairCap.position.y = T(2.14);
     torso.add(hairCap);
+    // 後腦頭髮:順著後上方披下來(蓋住後腦,不往前遮臉)
     const hairBack = new THREE.Mesh(
-      new THREE.SphereGeometry(0.255, 16, 8, Math.PI, Math.PI, Math.PI * 0.35, Math.PI * 0.3),
+      new THREE.SphereGeometry(0.258, 16, 12, Math.PI * 0.72, Math.PI * 1.56, Math.PI * 0.12, Math.PI * 0.62),
       capMat,
     );
-    hairBack.position.y = T(2.12);
+    hairBack.position.y = T(2.13);
     torso.add(hairBack);
   }
 
@@ -331,13 +339,14 @@ function makeCyclist({ suit = 0x2f6f4e, trim = 0xf2e9d8, skin = 0xf3cca6, hair =
     const metalMat = new THREE.MeshStandardMaterial({ color: 0x2b3038, roughness: 0.4, metalness: 0.6 });
     const tyreMat = new THREE.MeshStandardMaterial({ color: 0x18181c, roughness: 0.75 });
     const rimMat = new THREE.MeshStandardMaterial({ color: 0xcfd6dd, roughness: 0.3, metalness: 0.7 });
-    const WR = 0.34;
-    const REAR = [0, WR, -0.52];
-    const FRONT = [0, WR, 0.58];
-    const BB = [0, 0.27, -0.02]; // 五通(曲柄軸心)
-    const SEAT = [0, 0.86, -0.30]; // 座管頂
-    const HEADT = [0, 0.92, 0.46]; // 頭管頂(握把處)
-    const HEADB = [0, 0.42, 0.42]; // 前叉冠
+    // 公路/場地車比例:更大輪(WR 0.34→0.40)、更長軸距(1.10→1.32)、更高車架(座墊/握把 +0.12)
+    const WR = 0.40; // 700c 大輪
+    const REAR = [0, WR, -0.60];
+    const FRONT = [0, WR, 0.72]; // 軸距 = 1.32m(前後輪距拉長)
+    const BB = [0, 0.39, -0.02]; // 五通(曲柄軸心)——抬高 0.12 讓騎士坐姿隨之抬高(腿到踏板距離不變)
+    const SEAT = [0, 0.98, -0.30]; // 座管頂(座墊抬高 → 坐上去更挺)
+    const HEADT = [0, 1.04, 0.50]; // 頭管頂(握把處,抬高+略前=公路車伸展)
+    const HEADB = [0, 0.54, 0.48]; // 前叉冠
 
     // 車輪:disc 在局部 XY 平面,disc.rotation.y=π/2 把輪面轉成垂直前後向;spin=w.rotation.x(輪軸=X)
     const mkWheel = (z) => {
@@ -380,21 +389,21 @@ function makeCyclist({ suit = 0x2f6f4e, trim = 0xf2e9d8, skin = 0xf3cca6, hair =
     mkTube(HEADB, FRONT, 0.024, metalMat); // 前叉
 
     const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 0.28), metalMat);
-    saddle.position.set(0, 0.89, -0.30);
+    saddle.position.set(0, 1.01, -0.30);
     bikeGroup.add(saddle);
-    const seatpost = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.12, 8), metalMat);
-    seatpost.position.set(0, 0.85, -0.30);
+    const seatpost = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.16, 8), metalMat);
+    seatpost.position.set(0, 0.95, -0.30);
     bikeGroup.add(seatpost);
 
     // 下彎握把(bar 橫向沿 X;兩端小握把把手)
     const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.42, 8), metalMat);
     bar.rotation.z = Math.PI / 2;
-    bar.position.set(0, 0.94, 0.48);
+    bar.position.set(0, 1.06, 0.52);
     bikeGroup.add(bar);
     for (const sx of [-1, 1]) {
       const drop = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.13, 6), metalMat);
       drop.rotation.x = Math.PI / 2;
-      drop.position.set(sx * 0.2, 0.93, 0.54);
+      drop.position.set(sx * 0.2, 1.05, 0.58);
       bikeGroup.add(drop);
     }
 
@@ -428,7 +437,7 @@ function makeCyclist({ suit = 0x2f6f4e, trim = 0xf2e9d8, skin = 0xf3cca6, hair =
 // 自行車坐姿基準:前傾趴握把+屈膝踩踏板;踩踏動畫在 poseCyclist 疊加
 function poseCyclistIdle(f) {
   f.torso.rotation.x = 0.72; // 前傾趴低握把
-  f.rig.position.y = -0.17; // 坐上坐墊、屈膝
+  f.rig.position.y = -0.05; // 坐上(抬高後的)坐墊、屈膝——與 BB 同步抬高 0.12,腿到踏板距離不變
   for (const leg of [f.leftLeg, f.rightLeg]) {
     leg.pivot.rotation.x = -0.85;
     leg.pivot.rotation.z = 0;
@@ -450,6 +459,7 @@ export class CyclingGame {
     this.difficulty = DIFFICULTY_PRESETS[settings.difficulty] ? settings.difficulty : "normal";
     this.modeId = GAME_MODES[settings.modeId] ? settings.modeId : "race";
     this.mode = getModeConfig(this.modeId);
+    this.helmet = loadHelmet(); // 安全帽開關(戴/不戴,預設戴)——setupScene 建車手時用
 
     this.input = new InputManager();
     this.input.bindTouchButtons(this.touchRoot);
@@ -674,16 +684,34 @@ export class CyclingGame {
       treeIdx += 1;
     }
 
-    // 車手(P1 紅=內道;對手 藍/綠=外道)——bike:true 各配一台自行車
-    this.p1Figure = makeCyclist({ suit: SUITS.p1.suit, trim: SUITS.p1.trim, bike: true });
+    // 車手(P1 紅=內道;對手 藍/綠=外道)——bike:true 各配一台自行車;安全帽依 this.helmet
+    this.buildCyclists();
+  }
+
+  // 依 this.helmet 建/重建三位車手(戴帽切換時可重跑)——被 setupScene 與 setHelmet 共用
+  buildCyclists() {
+    for (const f of [this.p1Figure, this.p2Figure, this.aiFigure]) {
+      if (f && f.group) this.scene.remove(f.group);
+    }
+    const h = this.helmet;
+    this.p1Figure = makeCyclist({ suit: SUITS.p1.suit, trim: SUITS.p1.trim, bike: true, helmet: h });
     this.scene.add(this.p1Figure.group);
-    this.p2Figure = makeCyclist({ suit: SUITS.p2.suit, trim: SUITS.p2.trim, bike: true });
+    this.p2Figure = makeCyclist({ suit: SUITS.p2.suit, trim: SUITS.p2.trim, bike: true, helmet: h });
     this.scene.add(this.p2Figure.group);
-    this.aiFigure = makeCyclist({ suit: SUITS.ai.suit, trim: SUITS.ai.trim, skin: 0xe8b98a, bike: true });
+    this.aiFigure = makeCyclist({ suit: SUITS.ai.suit, trim: SUITS.ai.trim, skin: 0xe8b98a, bike: true, helmet: h });
     this.scene.add(this.aiFigure.group);
     poseCyclistIdle(this.p1Figure);
     poseCyclistIdle(this.p2Figure);
     poseCyclistIdle(this.aiFigure);
+  }
+
+  // 安全帽開關:存檔 → 重建車手 → 重指 racer.figure(只在選單/未賽中切換)
+  setHelmet(on) {
+    this.helmet = !!on;
+    saveHelmet(this.helmet);
+    this.buildCyclists();
+    this.resetRacers(); // racer.figure 重新指向新 figure 並歸位擺好
+    this.pushHud();
   }
 
   buildCrowd() {
@@ -734,6 +762,10 @@ export class CyclingGame {
       finishTime: 0,
       aiTapTimer: 0,
       lastResult: null, // 'perfect' | 'good' | 'fast' | 'same' | null
+      stamina: 1, // 衝刺體力條(0~1)
+      sprintHeld: false, // 本幀是否按住衝刺鍵
+      sprinting: false, // 實際生效中的衝刺(latch + 有體力 + 沒踉蹌)
+      _sprintLatch: false, // 起衝閂鎖:要體力>SPRINT_MIN_START 才能點著,放開或耗盡才解
     };
   }
 
@@ -886,8 +918,12 @@ export class CyclingGame {
   applyPush(racer, q, side) {
     const preset = DIFFICULTY_PRESETS[this.difficulty];
     const weak = racer.stumbleT > 0 ? 0.45 : 1;
-    const gain = (preset.maxSpeed * 1.18 - racer.speed) * preset.push * (0.35 + 0.65 * q) * weak;
-    racer.speed = Math.min(preset.maxSpeed * 1.05, racer.speed + Math.max(0, gain));
+    // 衝刺:抬高速度上限 + 放大踩踏增益(明顯更快)
+    const boost = racer.sprinting ? SPRINT_SPEED_MULT : 1;
+    const spGain = racer.sprinting ? SPRINT_GAIN_MULT : 1;
+    const cap = preset.maxSpeed * boost;
+    const gain = (cap * 1.18 - racer.speed) * preset.push * spGain * (0.35 + 0.65 * q) * weak;
+    racer.speed = Math.min(cap * 1.05, racer.speed + Math.max(0, gain));
     // 動畫:踩踏 kick(踩一下衝出去一下的推進感)
     racer.kickT = 0;
     racer.kickSide = side;
@@ -1033,6 +1069,9 @@ export class CyclingGame {
       if (this.input.consumePress("p2right")) this.tapPush(solo ? this.p1 : this.opp, "R");
       this.p1.leanHeld = this.input.isDown("p1lean") || (solo && this.input.isDown("p2lean"));
       if (duel) this.opp.leanHeld = this.input.isDown("p2lean");
+      // 衝刺鍵(按住):P1=ShiftLeft;P2=ShiftRight/Enter;solo 時 P2 衝刺鍵別名回 P1(和踩踏鍵一致)
+      this.p1.sprintHeld = this.input.isDown("p1sprint") || (solo && this.input.isDown("p2sprint"));
+      if (duel) this.opp.sprintHeld = this.input.isDown("p2sprint");
 
       // —— AI(單人競速):同一套 racer,輸入來源=節拍器(duel-2p-kit §7C) ——
       if (!this._isHuman("opp") && this.mode.race && !this.opp.finished) {
@@ -1058,6 +1097,12 @@ export class CyclingGame {
       // —— 物理:騎行慣性衰減(直道慣性 vs 彎道沒傾身自然減速) ——
       for (const r of [this.p1, this.opp]) {
         if (!r.figure.group.visible && r !== this.p1) continue;
+        // —— 衝刺體力:起衝需 stamina>SPRINT_MIN_START;衝刺中耗、否則回;耗盡/放開解閂(不能無限衝) ——
+        if (r.sprintHeld && !r._sprintLatch && r.stamina > SPRINT_MIN_START) r._sprintLatch = true;
+        if (!r.sprintHeld || r.stamina <= 0.01) r._sprintLatch = false;
+        r.sprinting = r._sprintLatch && !r.finished && r.stumbleT <= 0 && r.stamina > 0.01;
+        if (r.sprinting) r.stamina = Math.max(0, r.stamina - SPRINT_DRAIN * delta);
+        else r.stamina = Math.min(1, r.stamina + SPRINT_RECOVER * delta);
         if (r.finished) {
           r.speed = Math.max(0, r.speed - delta * 3); // 衝線後滑行收速
         } else {
@@ -1187,15 +1232,16 @@ export class CyclingGame {
     }
     const sp = r.speed;
     const fast = clamp(sp / 12, 0, 1);
+    const sprintPush = r.sprinting ? 0.14 : 0; // 衝刺:踩踏幅度加大(用力猛踩)
     const crankAng = r.strideT * Math.PI * 2; // 曲柄角(strideT 隨速度連續遞增+每次踩踏 +0.5 圈)
     const kick = Math.max(0, 1 - (r.kickT ?? 9) / 0.34); // 踩踏瞬間的爆發相
-    // 前傾趴握把:越快趴越低(踩一下衝一下的下壓)
-    f.torso.rotation.x = 0.72 + fast * 0.16 + kick * 0.05;
-    f.rig.position.y = -0.17 - fast * 0.02;
+    // 前傾趴握把:越快趴越低(踩一下衝一下的下壓);衝刺時再壓低一點(進攻姿)
+    f.torso.rotation.x = 0.72 + fast * 0.16 + kick * 0.05 + (r.sprinting ? 0.06 : 0);
+    f.rig.position.y = -0.05 - fast * 0.02;
     // 轉曲柄+輪子(判定=畫面:踩對了看得出踩一下衝一下)
     if (f.bike) {
       f.bike.crank.rotation.x = crankAng;
-      const roll = r.dist / 0.34; // 輪子滾動角=里程/輪半徑(越快轉越快)
+      const roll = r.dist / 0.40; // 輪子滾動角=里程/輪半徑(WR=0.40,越快轉越快)
       f.bike.frontWheel.rotation.x = roll;
       f.bike.rearWheel.rotation.x = roll;
     }
@@ -1203,9 +1249,9 @@ export class CyclingGame {
     const legs = [[f.leftLeg, 0], [f.rightLeg, Math.PI]];
     for (const [leg, ph] of legs) {
       const a = crankAng + ph;
-      leg.pivot.rotation.x = -0.85 + Math.sin(a) * (0.4 + kick * 0.08);
+      leg.pivot.rotation.x = -0.85 + Math.sin(a) * (0.4 + kick * 0.08 + sprintPush);
       leg.pivot.rotation.z = 0;
-      leg.joint.rotation.x = 1.15 - Math.cos(a) * 0.4;
+      leg.joint.rotation.x = 1.15 - Math.cos(a) * (0.4 + sprintPush);
     }
     // 手臂:握把上微微起伏(衝刺時低頭下壓)
     const barBob = Math.sin(crankAng) * 0.045;
@@ -1225,6 +1271,7 @@ export class CyclingGame {
   }
 
   updateCamera(delta) {
+    if (this.freeCam) return; // 驗證用:凍結自動運鏡,讓外部自由擺鏡頭(拍正面臉)
     const r = this.p1;
     const p = ovalPoint(r.dist, r.lane);
     const duel = this.modeId === "duel2p";
@@ -1273,6 +1320,14 @@ export class CyclingGame {
     this.camLook.lerp(desiredLook, k);
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
+    // 衝刺鏡頭:P1(duel 時任一人)衝刺 → FOV 微張(速度線般的推進感);放開平滑復位到 52
+    const sprintOn = this.p1.sprinting || (duel && this.opp.sprinting);
+    this._sprintCam = (this._sprintCam ?? 0) + ((sprintOn ? 1 : 0) - (this._sprintCam ?? 0)) * (1 - Math.exp(-delta * 6));
+    const fov = 52 + this._sprintCam * 7;
+    if (Math.abs(this.camera.fov - fov) > 0.02) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   // 小地圖資料(路線+雙車手)
@@ -1338,6 +1393,12 @@ export class CyclingGame {
           : `落後 ${(this.opp.dist - this.p1.dist).toFixed(0)} m`)
         : "—",
       p2SpeedText: duel ? `${(this.opp.speed * 3.6).toFixed(0)} km/h` : null,
+      // 衝刺體力(P1 一律有;P2 只在雙人)
+      stamina01: clamp(this.p1.stamina, 0, 1),
+      p1Sprinting: this.p1.sprinting,
+      p2Stamina01: duel ? clamp(this.opp.stamina, 0, 1) : null,
+      p2Sprinting: duel ? this.opp.sprinting : false,
+      sprinting: this.p1.sprinting || (duel && this.opp.sprinting), // 速度線用
       overlay: { ...this.overlay },
     });
   }

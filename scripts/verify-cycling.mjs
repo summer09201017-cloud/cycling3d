@@ -129,6 +129,7 @@ await page.screenshot({ path: outDir + "/cy-duel-finish.png" });
 await openMode("practice");
 await page.keyboard.press("Space");
 await page.waitForTimeout(200);
+results.practiceNoOpp = await page.evaluate((g) => !window[g].opp.figure.group.visible, G); // 此刻抓(後續情境會切回 race)
 await pedalTaps(10, 380);
 const beforeStumble = await page.evaluate((g) => window[g].p1.speed, G);
 await page.keyboard.press("KeyA");
@@ -139,6 +140,87 @@ const afterStumble = await page.evaluate((g) => ({ speed: window[g].p1.speed, st
 results.practiceStumble = { before: Math.round(beforeStumble * 100) / 100, after: Math.round(afterStumble.speed * 100) / 100, stumbled: afterStumble.stumble, phase: afterStumble.phase };
 await page.screenshot({ path: outDir + "/cy-practice.png" });
 
+// —— ⑤安全帽 戴/不戴:各截正面+側面(freeCam 對準臉,確認露眼) ——
+// 對準騎士頭部擺鏡頭(正面=前方回看、側面=側邊看);helmet 由 game.setHelmet 切換並重建車手
+const faceShots = async (tag) => {
+  // 正面
+  await page.evaluate((g) => {
+    const game = window[g];
+    game.freeCam = true;
+    const V = game.camera.position.constructor; // THREE.Vector3
+    const grp = game.p1.figure.group;
+    const hp = game.p1.figure.head.getWorldPosition(new V());
+    const fx = Math.sin(grp.rotation.y);
+    const fz = Math.cos(grp.rotation.y);
+    game.camera.position.set(hp.x + fx * 1.85, hp.y + 0.05, hp.z + fz * 1.85);
+    game.camera.lookAt(hp.x, hp.y, hp.z);
+    game.camera.fov = 36;
+    game.camera.updateProjectionMatrix();
+  }, G);
+  await page.waitForTimeout(450);
+  await page.screenshot({ path: `${outDir}/cy-helmet-${tag}-front.png` });
+  // 側面
+  await page.evaluate((g) => {
+    const game = window[g];
+    const V = game.camera.position.constructor;
+    const grp = game.p1.figure.group;
+    const hp = game.p1.figure.head.getWorldPosition(new V());
+    const fx = Math.sin(grp.rotation.y);
+    const fz = Math.cos(grp.rotation.y);
+    game.camera.position.set(hp.x + fz * 1.85, hp.y + 0.04, hp.z - fx * 1.85);
+    game.camera.lookAt(hp.x, hp.y, hp.z);
+    game.camera.fov = 36;
+    game.camera.updateProjectionMatrix();
+  }, G);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${outDir}/cy-helmet-${tag}-side.png` });
+};
+
+await openMode("race", "normal");
+await page.evaluate((g) => window[g].setHelmet(true), G); // 戴帽
+await page.waitForTimeout(300);
+await faceShots("on");
+await page.evaluate((g) => window[g].setHelmet(false), G); // 不戴(露髮)
+await page.waitForTimeout(300);
+await faceShots("off");
+await page.evaluate((g) => { window[g].freeCam = false; window[g].setHelmet(true); }, G); // 復原
+
+// —— ⑥衝刺+體力條:按住 Shift 踩踏→速度升+體力降;放開→體力回復 ——
+await openMode("race", "normal");
+await page.keyboard.press("Space");
+await page.waitForTimeout(200);
+await pedalTaps(8, 360);
+const spBase = await page.evaluate((g) => ({ speed: Math.round(window[g].p1.speed * 100) / 100, stamina: Math.round(window[g].p1.stamina * 100) / 100 }), G);
+await page.keyboard.down("ShiftLeft"); // 按住衝刺
+await pedalTaps(6, 300);
+const spDuring = await page.evaluate((g) => ({ speed: Math.round(window[g].p1.speed * 100) / 100, stamina: Math.round(window[g].p1.stamina * 100) / 100, sprinting: window[g].p1.sprinting }), G);
+await page.screenshot({ path: outDir + "/cy-sprint.png" });
+await page.keyboard.up("ShiftLeft"); // 放開
+await page.waitForTimeout(1900);
+const spAfter = await page.evaluate((g) => ({ stamina: Math.round(window[g].p1.stamina * 100) / 100 }), G);
+results.sprint = { base: spBase, during: spDuring, after: spAfter };
+
+// —— ⑦單人 normal:高手 bot(穩定節奏 340ms + 全程傾身 + 有體力就衝)能贏 AI ——
+await openMode("race", "normal");
+await page.keyboard.press("Space");
+await page.waitForTimeout(150);
+await page.keyboard.down("KeyW"); // 全程按住傾身(直道無害、彎道不減速)
+let botSprinting = false;
+let botEnded = false;
+for (let i = 0; i < 260; i += 1) {
+  await page.keyboard.press(i % 2 === 0 ? "KeyA" : "KeyD");
+  const st = await page.evaluate((g) => ({ phase: window[g].phase, stamina: window[g].p1.stamina }), G);
+  if (st.phase === "ended") { botEnded = true; break; }
+  if (!botSprinting && st.stamina > 0.55) { await page.keyboard.down("ShiftLeft"); botSprinting = true; }
+  else if (botSprinting && st.stamina < 0.15) { await page.keyboard.up("ShiftLeft"); botSprinting = false; }
+  await page.waitForTimeout(340);
+}
+if (botSprinting) await page.keyboard.up("ShiftLeft");
+await page.keyboard.up("KeyW");
+await page.waitForTimeout(500);
+results.normalWin = await snap();
+await page.screenshot({ path: outDir + "/cy-normal-win.png" });
+
 // —— 驗收判定 ——
 const checks = {
   kidsSpeedUp: results.kidsSkating.p1.speed > 3,
@@ -148,8 +230,12 @@ const checks = {
   bendLeanHeld: results.bendLean.lean === true,
   duelBothMove: results.duelSkating.p1.speed > 3 && results.duelSkating.opp.speed > 3,
   duelP1Win: results.duelFinish.phase === "ended" && results.duelFinish.overlay.title.includes("P1"),
-  practiceNoOpp: (await page.evaluate((g) => !window[g].opp.figure.group.visible, G)) === true,
+  practiceNoOpp: results.practiceNoOpp === true,
   stumbleSlows: results.practiceStumble.after < results.practiceStumble.before && results.practiceStumble.stumbled && results.practiceStumble.phase === "skating",
+  sprintSpeedUp: results.sprint.during.speed > results.sprint.base.speed && results.sprint.during.sprinting === true,
+  sprintDrains: results.sprint.during.stamina < results.sprint.base.stamina,
+  sprintRecovers: results.sprint.after.stamina > results.sprint.during.stamina,
+  normalWinWithSprint: results.normalWin.phase === "ended" && /第一個衝線|勝利/.test(results.normalWin.overlay.title + results.normalWin.overlay.eyebrow),
   zeroPageErrors: errors.length === 0,
 };
 const allGreen = Object.values(checks).every(Boolean);

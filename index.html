@@ -115,6 +115,22 @@
           <div class="meter-track stamina">
             <div id="bendFill" class="meter-fill stamina-fill"></div>
           </div>
+
+          <div class="meter-copy stamina-copy">
+            <span class="mini-label" id="staminaLabel">衝刺體力(按住 Shift)</span>
+            <strong id="staminaValue">滿</strong>
+          </div>
+          <div class="meter-track">
+            <div id="staminaFill" class="meter-fill sprint-fill"></div>
+          </div>
+
+          <div class="meter-copy stamina-copy" id="p2StaminaRow" style="display: none">
+            <span class="mini-label">P2 衝刺體力(按住 右Shift/Enter)</span>
+            <strong id="p2StaminaValue">滿</strong>
+          </div>
+          <div class="meter-track" id="p2StaminaTrack" style="display: none">
+            <div id="p2StaminaFill" class="meter-fill sprint-fill"></div>
+          </div>
         </div>
 
         <div class="panel-block action-buttons">
@@ -134,11 +150,12 @@
         <div class="panel-block instructions">
           <p class="mini-label">操作</p>
           <p>出發: 空白鍵或點畫面</p>
-          <p>P1 踩踏: A / D 左右交替｜傾身: 按住 W</p>
-          <p>P2(雙人): ← / → 交替｜傾身: 按住 ↑</p>
-          <p>單人時方向鍵也可以玩(等同 A/D/W)</p>
-          <p>平板: 點畫面=自動交替踩,「傾身」鈕過彎</p>
-          <p>視角切換: V｜暫停: Esc / P</p>
+          <p>P1 踩踏: A / D 左右交替｜傾身: 按住 W｜衝刺: 按住 左Shift</p>
+          <p>P2(雙人): ← / → 交替｜傾身: 按住 ↑｜衝刺: 按住 右Shift 或 Enter</p>
+          <p>衝刺=更快,但吃體力條,空了不能衝——抓節奏適時衝刺才追得過 AI!</p>
+          <p>單人時方向鍵/右Shift 也可以玩(等同 A/D/W/衝刺)</p>
+          <p>平板: 點畫面=自動交替踩,「衝刺」「傾身」鈕在右下</p>
+          <p>視角切換: V(共 5 種)｜暫停: Esc / P</p>
         </div>
       </aside>
 
@@ -148,10 +165,13 @@
           <button data-action="p1right" aria-label="右踩">右踩 ▶</button>
         </div>
         <div class="action-pad">
+          <button data-action="p1sprint" class="sprint">衝刺</button>
           <button data-action="p1lean" class="shoot">傾身</button>
           <button data-action="camera">視角</button>
         </div>
       </div>
+
+      <div class="speed-lines" id="speedLines" aria-hidden="true"></div>
 
       <div class="overlay-shell" id="matchOverlay" aria-live="polite">
         <div class="overlay-card">
@@ -211,6 +231,12 @@
               <select id="audioSelect">
                 <option value="on">開啟</option>
                 <option value="off">靜音</option>
+              </select>
+
+              <label class="field-label" for="helmetSelect">安全帽</label>
+              <select id="helmetSelect">
+                <option value="on">戴(預設)</option>
+                <option value="off">不戴(露出頭髮)</option>
               </select>
 
               <div class="home-mode-meta">

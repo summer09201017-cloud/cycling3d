@@ -4,16 +4,19 @@ const KEY_BINDINGS = {
   KeyA: "p1left",
   KeyD: "p1right",
   KeyW: "p1lean",
+  ShiftLeft: "p1sprint", // P1 衝刺(按住)
   ArrowLeft: "p2left",
   ArrowRight: "p2right",
   ArrowUp: "p2lean",
+  ShiftRight: "p2sprint", // P2 衝刺(按住)
+  Enter: "p2sprint", // P2 衝刺備用鍵
   Space: "shoot",
   KeyV: "camera",
   Escape: "pause",
   KeyP: "pause",
 };
 
-const PREVENT_DEFAULT = new Set(["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Tab"]);
+const PREVENT_DEFAULT = new Set(["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Tab", "Enter"]);
 
 export class InputManager {
   constructor() {

@@ -3,6 +3,13 @@
 > 2026-07-20 建站:fork 自 speedskating3d(換皮:速滑→自行車競速)。核心手感沿用
 > 左右交替節奏(蹬冰→踩踏板)+彎道傾身;同機雙人照 duel-2p-kit §7C 競速型。
 > 尚未部署;上架時走 CF Pages(/ship-cf,2026-07-19 鐵則:新站一律 Cloudflare)。
+> 2026-07-20 ②(sw nf2→nf3):①安全帽戴/不戴開關(首頁選單 helmetSelect,存 localStorage
+> `cycling3d-helmet`,預設戴)——帽殼/髮際線一律坐「額頭上緣」高於眉,絕不遮眼(舊版帽殼半球
+> 會蓋住眼,已修)。②自行車加高加長(WR 0.34→0.40、軸距 1.10→1.32、車架+0.12;騎士 rig 同步
+> 抬高 0.12 → 腿到踏板距離不變)。③衝刺+體力條(P1=左Shift、P2=右Shift/Enter;
+> SPRINT_SPEED_MULT 1.34+GAIN 1.6、吃 stamina、空了不能衝;HUD 兩條體力條+速度線覆蓋層
+> `#speedLines`+衝刺 FOV 52→59);normal AI 微降(aiSkill 0.7→0.66)讓「節奏+衝刺」追得過。
+> 5 視角不動(updateCamera 只加 freeCam 驗證鉤+尾段 FOV)。
 
 ## 引擎核心(換皮時別動的)
 
@@ -39,9 +46,11 @@
 
 `npm run build`(檢查 dist/ 有真產物)→ `npx vite preview --port 4173` →
 `node scripts/verify-cycling.mjs http://localhost:4173 scripts/shots`
-(單人 kids/normal、雙人、練習、彎道傾身,全程 0 pageerror 才綠;本次 10/10 全綠)。
+(單人 kids/normal、雙人、練習、彎道傾身、安全帽戴/不戴正面+側面、衝刺體力升降、
+節奏+衝刺贏 normal AI,全程 0 pageerror 才綠;本次 14/14 全綠)。
+★驗證鉤:`game.freeCam=true` 凍結運鏡讓外部自由擺鏡頭(拍臉);`game.setHelmet(bool)` 切帽重建車手。
 
 ## 部署
 
 尚未部署(主線接手)。beacon 雙平台版已鋪(index.html `window.psPing`,只擋 localhost;
-id=cycling3d,-start/-done 帶 t 秒)。sw.js CACHE_NAME=cycling3d-nf1,改版要 bump。
+id=cycling3d,-start/-done 帶 t 秒)。sw.js CACHE_NAME=cycling3d-nf3,改版要 bump。
