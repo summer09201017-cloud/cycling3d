@@ -1,5 +1,5 @@
 // 網路優先 HTML+快取優先資產(07-13 修復:cache-first 舊 index 會在部署後 404 壞站)
-const CACHE_NAME = "cycling3d-nf6"; // nf6:idle 生動抽成 3d-figure-kit 共用資產 idle-life.js(行為不變);nf5 騎士往左看+微笑放大(0.6rad/1.4)+觀眾舉手歡呼+左右看+耳前無髮鐵律;nf4 騎士 idle 生動(headGroup 群組化);nf3 安全帽開關+車身加高;nf1 首發(fork speedskating3d)
+const CACHE_NAME = "cycling3d-nf7"; // nf6:idle 生動抽成 3d-figure-kit 共用資產 idle-life.js(行為不變);nf5 騎士往左看+微笑放大(0.6rad/1.4)+觀眾舉手歡呼+左右看+耳前無髮鐵律;nf4 騎士 idle 生動(headGroup 群組化);nf3 安全帽開關+車身加高;nf1 首發(fork speedskating3d)
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
