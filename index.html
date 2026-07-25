@@ -304,5 +304,77 @@ window.psPing('');
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add); else add();
 })();
 </script>
+
+<script>
+// 🎵 背景音樂(BGM 百曲庫 0726,skill procedural-bgm):零音檔 Web Audio。
+// 曲子由站名雜湊決定=全艦隊每站不同首;有關卡的遊戲可呼叫 window.hfpcBgmLevel(n) 換曲。
+// 音域 330Hz+/音量經 AnalyserNode 校正(手機喇叭放不出 500Hz 以下——0726 實測)。
+(function () {
+  var SITE = 'cycling3d';
+  var muted = false; try { muted = localStorage.getItem('bgm-muted') === '1'; } catch (e) {}
+  var ctx = null, timer = 0, step = 0, cur = null, started = false;
+  function variant(lv) {
+    var SC = [[523.25,587.33,659.25,783.99,880],[440,523.25,587.33,659.25,783.99],[392,440,493.88,587.33,659.25],[349.23,392,440,523.25,587.33],[587.33,659.25,739.99,880,987.77],[329.63,392,440,493.88,587.33],[466.16,523.25,587.33,698.46,783.99],[415.3,466.16,554.37,622.25,739.99]];
+    var PT = [[0,1,2,3,4,3,2,1],[0,2,4,2,1,3,2,0],[4,3,2,1,0,1,2,3],[0,0,2,2,4,4,2,-1],[0,2,1,3,2,4,3,-1],[4,2,0,2,4,2,1,0],[0,3,1,4,2,0,3,-1],[2,4,2,0,1,3,4,2]];
+    var x = 2166136261, s = SITE + '|' + (lv || 1);
+    for (var i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619) >>> 0 }
+    var mul = [1, 1.122, 0.891][(x >>> 13) % 3];
+    var sc = SC[x % 8].map(function (f) { return f * mul });
+    var p = PT[(x >>> 3) % 8].concat(PT[(x >>> 6) % 8]);
+    var wave = ['triangle', 'square', 'sine'][(x >>> 11) % 3];
+    return { mel: p.map(function (i) { return i < 0 ? 0 : sc[i] }),
+             bass: [0,0,3,3,4,4,3,3,0,0,3,3,4,4,0,0].map(function (i) { return sc[i] / 2 }),
+             wave: wave, vol: wave === 'square' ? 0.2 : wave === 'sine' ? 0.42 : 0.32,
+             ms: [190, 220, 250, 290][(x >>> 9) % 4] };
+  }
+  function blip(f, dur, type, vol) {
+    if (muted || !ctx) return;
+    try {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(vol, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + dur + 0.02);
+    } catch (e) {}
+  }
+  function tick() {
+    if (muted || !cur) return;
+    var i = step % 16;
+    if (cur.bass[i]) blip(cur.bass[i], cur.ms / 1000 * 1.8, 'sine', 0.02);
+    if (step % 2 === 0) { var mf = cur.mel[(step / 2) % 16 | 0]; if (mf) blip(mf, cur.ms / 1000 * 1.7, cur.wave, cur.vol); }
+    step++;
+  }
+  window.hfpcBgmLevel = function (lv) { cur = variant(lv); step = 0; if (timer) { clearInterval(timer); timer = setInterval(tick, cur.ms); } };
+  function start() {
+    if (started || muted) return; started = true;
+    try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+    cur = cur || variant(1);
+    timer = setInterval(tick, cur.ms);
+  }
+  addEventListener('pointerdown', function () { start(); try { if (ctx && ctx.state === 'suspended') ctx.resume(); } catch (e) {} }, { passive: true });
+  document.addEventListener('visibilitychange', function () { if (!ctx) return; try { document.hidden ? ctx.suspend() : ctx.resume(); } catch (e) {} });
+  // 🎵 靜音鈕(放「← 返回大廳」鈕下方,同一套視覺)
+  function addBtn() {
+    if (document.querySelector('[data-hfpc-bgm]')) return;
+    var b = document.createElement('button');
+    b.textContent = muted ? '🔇' : '🎵';
+    b.setAttribute('aria-label', '開關背景音樂');
+    b.setAttribute('data-hfpc-bgm', '1');
+    b.style.cssText = 'position:fixed;z-index:2147483000;' +
+      'top:calc(60px + env(safe-area-inset-top));left:calc(8px + env(safe-area-inset-left));' +
+      'min-width:44px;min-height:44px;border:0;border-radius:12px;font-size:17px;' +
+      'background:rgba(0,0,0,.58);color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent';
+    b.addEventListener('click', function () {
+      muted = !muted;
+      try { localStorage.setItem('bgm-muted', muted ? '1' : '0'); } catch (e) {}
+      b.textContent = muted ? '🔇' : '🎵';
+      if (!muted) start();
+    });
+    (document.body || document.documentElement).appendChild(b);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addBtn); else addBtn();
+})();
+</script>
 </body>
 </html>
