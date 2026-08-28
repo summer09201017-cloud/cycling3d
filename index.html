@@ -377,6 +377,20 @@ window.psPing('');
 })();
 </script>
 <div id="appVerBadge" style="position:fixed;right:6px;bottom:4px;font-size:11px;line-height:1;opacity:.55;z-index:2147483000;pointer-events:none;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);font-family:system-ui,sans-serif"></div>
+    <script>
+      /* 🏷️ appVerBadgeFade（0828）：版號徽章是 position:fixed 在右下角，實測會蓋住大廳卡片、
+         遊戲的「難度 / 開始比賽」按鈕——pointer-events:none 只讓「點擊」穿過去，字還是被蓋著。
+         做法：10 秒後淡出。要看版本就重新整理，平常不擋畫面。 */
+      ;(function () {
+        var b = document.getElementById('appVerBadge')
+        if (!b) return
+        b.style.transition = 'opacity .8s'
+        setTimeout(function () {
+          b.style.opacity = '0'
+          setTimeout(function () { b.style.display = 'none' }, 900)
+        }, 10000)
+      })()
+    </script>
 <script>
 /* 🏷️ 版號徽章(0820 全艦隊批次):問「正在控制本頁的 SW」拿版本=你手上真的在跑的那一版,
    頁面不寫死任何版號(不會漂)。硬重整(Ctrl+F5)的分頁不受 SW 管、問不到 → 誠實顯示退路
