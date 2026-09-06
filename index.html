@@ -12,7 +12,41 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <title>3D 自行車競速 Cycling 3D</title>
-  </head>
+  <style id="mfsStyle">
+/* mfs-landscape-fullscreen v1 —— 勿手改;要改請改 skills/force-landscape-pwa/patches/add-landscape-fullscreen.mjs 後重打 */
+#mfsRotate,#mfsFull{display:none}
+@media (orientation:portrait) and (pointer:coarse){
+  /* 只蓋「觸控裝置的直向」:桌機把視窗拉直、投影機直式輸出都不該被蓋住 */
+  #mfsRotate{position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:20px;background:#0d1317;color:#eaf4ff;
+    text-align:center;padding:24px calc(24px + env(safe-area-inset-right)) 24px calc(24px + env(safe-area-inset-left));
+    font:700 clamp(17px,4.6vw,22px)/1.75 "Microsoft JhengHei","PingFang TC",system-ui,sans-serif}
+  #mfsRotate .mfsIcon{font-size:clamp(54px,15vw,82px);line-height:1}
+  #mfsRotate p{margin:0}
+  #mfsRotate b{color:#8fdcef}
+  #mfsRotate button{display:inline-flex;align-items:center;gap:9px;font:inherit;
+    font-size:clamp(16px,4.2vw,20px);padding:13px 24px;min-height:52px;border-radius:12px;
+    border:2px solid #7fd4e8;background:#12333f;color:#eaf4ff;cursor:pointer}
+  #mfsRotate button:active{transform:scale(.97)}
+  #mfsRotate small{font-weight:400;opacity:.72;font-size:.78em;max-width:24em}
+}
+@media (prefers-reduced-motion:no-preference){
+  @media (orientation:portrait) and (pointer:coarse){
+    #mfsRotate .mfsIcon{animation:mfsSpin 1.9s ease-in-out infinite}
+  }
+}
+@keyframes mfsSpin{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(78deg)}}
+@media (pointer:coarse){
+  /* 進了全螢幕就自己藏起來(body.mfs-fs)⇒ 真正在玩的時候不會壓到遊戲 HUD */
+  body:not(.mfs-fs) #mfsFull{position:fixed;display:flex;align-items:center;justify-content:center;
+    top:calc(8px + env(safe-area-inset-top));right:calc(8px + env(safe-area-inset-right));
+    z-index:2147482000;width:42px;height:42px;padding:0;border-radius:11px;
+    border:1px solid rgba(255,255,255,.42);background:rgba(9,15,19,.55);color:#fff;
+    cursor:pointer;opacity:.5;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+  body:not(.mfs-fs) #mfsFull:hover,body:not(.mfs-fs) #mfsFull:focus-visible{opacity:1}
+}
+</style>
+</head>
   <body>
     <div class="app-shell">
       <canvas id="gameCanvas" aria-label="3D 自行車競速 遊戲畫面"></canvas>
@@ -414,6 +448,55 @@ window.psPing('');
     if (!navigator.serviceWorker.controller) el.textContent = '🏷️ 版本 —(強制重新整理的分頁問不到;普通重整一次即顯示)';
     else { ask(); setTimeout(function () { if (!got) el.textContent = '🏷️ 版本 —(讀不到,重整一次即顯示)'; }, 1500); }
   }, 1600);
+})();
+</script>
+<!-- mfs-landscape-fullscreen v1 -->
+<div id="mfsRotate" role="dialog" aria-modal="true" aria-label="請把手機轉成橫向">
+  <div class="mfsIcon" aria-hidden="true">🔄</div>
+  <p>請把手機轉成<b>橫向</b>來玩</p>
+  <button type="button" id="mfsGo"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>進入全螢幕橫向</span></button>
+  <small>按一下會試著自動轉橫向並全螢幕。iPhone 請手動轉成橫向,或「加入主畫面」後從主畫面開啟。</small>
+</div>
+<button type="button" id="mfsFull" title="全螢幕" aria-label="全螢幕"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+<script>
+/* mfs-landscape-fullscreen v1 */
+(function () {
+  try {
+    var root = document.documentElement;
+    /* 被嵌進別的頁面當關卡時,宿主已經是全螢幕:不蓋提示、不放鈕、不搶全螢幕,
+       否則會接管整頁(見 skill 的「嵌入模式不要再請求」)。 */
+    if (window.self !== window.top) {
+      var r = document.getElementById('mfsRotate'), f = document.getElementById('mfsFull');
+      if (r) r.remove(); if (f) f.remove();
+      return;
+    }
+    var req = root.requestFullscreen || root.webkitRequestFullscreen || root.webkitRequestFullScreen || null;
+    var isFs = function () { return !!(document.fullscreenElement || document.webkitFullscreenElement); };
+    var coarse = function () {
+      try { return !!(window.matchMedia && matchMedia('(pointer:coarse)').matches); } catch (e) { return false; }
+    };
+    function lockLandscape() {
+      /* 鎖向必須在全螢幕生效之後,多數瀏覽器才受理 */
+      try { var so = screen.orientation; if (so && so.lock) { var p = so.lock('landscape'); if (p && p.catch) p.catch(function () {}); } } catch (e) {}
+    }
+    function enter() {
+      if (!coarse()) return;   /* 桌機/投影不打擾:那邊按 F11 就好 */
+      try {
+        if (req && !isFs()) {
+          var p = req.call(root);
+          if (p && p.then) p.then(lockLandscape).catch(function () {}); else lockLandscape();
+        } else lockLandscape();
+      } catch (e) { /* iOS Safari 不支援網頁全螢幕:安靜跳過,不能炸遊戲 */ }
+    }
+    function sync() { try { document.body.classList.toggle('mfs-fs', isFs()); } catch (e) {} }
+    var b = document.getElementById('mfsFull'); if (b) b.addEventListener('click', enter);
+    var g = document.getElementById('mfsGo'); if (g) g.addEventListener('click', enter);
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) { document.addEventListener(ev, sync); });
+    sync();
+    /* 已經橫著拿的人看不到蓋版提示 ⇒ 用「第一次觸控」試一次(全螢幕請求必須在使用者手勢裡)。
+       capture 但不 preventDefault:遊戲自己的手勢照樣收得到這一下。 */
+    window.addEventListener('pointerdown', enter, { once: true, capture: true });
+  } catch (e) {}
 })();
 </script>
 </body>
