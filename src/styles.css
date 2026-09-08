@@ -827,3 +827,34 @@ button.active {
   overscroll-behavior: contain;
 }
 .home-content { margin: auto 0; flex: 0 0 auto; }
+
+/* mfs-home-actions-sticky v1 —— 手機橫向:把「開始」那一列黏在畫面底部(0908 質化層第一輪 Q1)。
+   v1 的 mfs-home-screen-scroll 讓選單捲得動了,但畫面上沒有捲動提示、內容又垂直置中
+   ⇒ 孩子看到的是一個「看起來很完整」的畫面,而開始鈕還在 700~1100px 下面。
+   0908 手機橫向 844×390 掃描:47 站的行動鈕整顆在畫面外,24 站是這個模板;
+   大衛打獅熊有 -start 打點,近 30 天「開啟 15 次、按下開始 0 次」= 直接證據。
+   ⚠ 左右用負 margin 讓漸層滿版,**底部一律不留負值**(sticky 黏住時負的 margin-bottom
+     會吃掉緊鄰在前那個元素的空間;racing3d 連中兩次,而且「不超過 padding 就安全」
+     這個推論已被反證推翻 —— 沒有安全的數值)。
+   ⚠ 漸層必須不透明收尾:0908 撞球實例的透明黏底列壓住了唯一打得完的兩張模式卡。
+   底色取自本站 --bg-deep: #09131d。
+   ★ 附帶修掉 v1 的一個副作用:.home-backdrop 是 position:absolute; inset:0,而 v1 把
+     .home-screen 變成 overflow-y:auto ⇒ **底幕會跟著內容捲走**。0908 實測籃球3D:捲到底時
+     底幕底邊在 -806px、視口高 390px ⇒ 整片 390px 直接露出 3D 遊戲畫面,選單像壞掉。
+     修法是給捲動容器自己一層不透明底色(裝飾漸層仍由 .home-backdrop 疊在上面),
+     零版面風險;沒有 .home-backdrop 的站也一樣受益。
+   勿手改;要改請改 skills/force-landscape-pwa/patches/fix-home-actions-sticky.mjs 後重打 */
+.home-screen {
+  background: rgb(9, 19, 29);
+}
+.home-screen .home-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: 0.85rem -1rem 0;
+  padding: 0.85rem 1rem calc(0.95rem + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to bottom,
+    rgba(9, 19, 29, 0) 0%,
+    rgba(9, 19, 29, 0.92) 44%,
+    rgba(9, 19, 29, 0.985) 100%);
+}
